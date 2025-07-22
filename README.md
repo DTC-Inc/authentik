@@ -13,6 +13,26 @@ The stack includes the following services:
 - **GeoIP Update**: Location-based policy support (optional)
 - **Cloudflared**: Cloudflare tunnel integration (optional)
 
+## 🏢 Multi-Tenancy Support
+
+This Authentik deployment is configured with **multi-tenancy enabled**, allowing you to manage multiple isolated organizations within a single Authentik instance. Each tenant maintains complete separation of:
+
+- **Users and Groups**: Isolated user bases per tenant
+- **Applications**: Tenant-specific SSO applications
+- **Policies and Flows**: Custom authentication flows per tenant
+- **Branding**: Individual tenant customization and theming
+
+### DTC Use Case
+
+**DTC Inc.** is actively using this multi-tenant Authentik setup to provide centralized SSO services for all client organizations. The initial implementation focuses on **ZeroTier network management**, where each client tenant can:
+
+- Manage their own ZeroTier network access
+- Control user authentication for network resources
+- Maintain isolated security policies
+- Customize their authentication experience
+
+This architecture scales efficiently as DTC adds new clients and services, providing enterprise-grade identity management without requiring separate Authentik instances per client.
+
 ## 📋 Prerequisites
 
 - Docker Engine 20.10+ and Docker Compose v2
@@ -27,12 +47,15 @@ The stack includes the following services:
 Create a `.env` file with your configuration:
 
 ```bash
-# Copy the example environment file
-cp .env.example .env
+# Copy the template environment file
+cp authentik.env.template .env
 
-# Generate secure passwords
-echo "AUTHENTIK_SECRET_KEY=$(openssl rand -base64 60 | tr -d '\n')" >> .env
-echo "AUTHENTIK_DB_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')" >> .env
+# Generate secure passwords and update your .env file
+sed -i '' 's/YOUR_SECRET_KEY_HERE/'$(openssl rand -base64 60 | tr -d '\n')'/g' .env
+sed -i '' 's/YOUR_DB_PASSWORD_HERE/'$(openssl rand -base64 32 | tr -d '\n')'/g' .env
+
+# Edit the .env file to customize domains and other settings
+nano .env
 ```
 
 ### 2. Configure Environment Variables
@@ -51,6 +74,9 @@ AUTHENTIK_VERSION=2025.2
 AUTHENTIK_SECRET_KEY=your_secure_secret_key_here
 AUTHENTIK_ERROR_REPORTING=false
 
+# Multi-Tenancy Configuration
+AUTHENTIK_TENANTS_ENABLED=true
+
 # Domain Configuration
 AUTHENTIK_PUBLIC_DOMAIN=auth.yourdomain.com
 AUTHENTIK_PRIVATE_DOMAIN=auth.local.yourdomain.com
@@ -64,17 +90,16 @@ AUTHENTIK_DB_DATABASE_NAME=authentik
 # Network Configuration
 AUTHENTIK_APP_NETWORK=authentik_app
 AUTHENTIK_DB_NETWORK=authentik_db
-CONTAINERS_INTERNET_NETWORK=containers_internet
 ```
 
 ### 3. Network Setup
 
-Ensure your external network exists:
+The stack uses two Docker networks:
 
-```bash
-# Create the external internet network if it doesn't exist
-docker network create containers_internet
-```
+- **authentik_app**: Main application network with internet access
+- **authentik_db**: Internal database network (isolated)
+
+Networks are automatically created when the stack starts. No manual setup required.
 
 ### 4. Deploy the Stack
 
@@ -94,6 +119,8 @@ docker compose logs -f authentik-server
 1. Navigate to `https://your-domain.com/if/flow/initial-setup/`
 2. Set a password for the default `akadmin` user
 3. Complete the initial configuration wizard
+
+**Multi-Tenancy Setup**: After initial setup, navigate to the Admin interface to create and configure additional tenants. Each tenant will have its own unique subdomain or path for isolated access.
 
 ## 📧 Email Configuration (Recommended)
 
@@ -170,6 +197,7 @@ AUTHENTIK_MEDIA_BASE=//nas.local/authentik/media
 | **Authentik** | `AUTHENTIK_VERSION` | Authentik version tag | `2025.2` |
 | | `AUTHENTIK_SECRET_KEY` | Secret key (required) | - |
 | | `AUTHENTIK_ERROR_REPORTING` | Enable error reporting | `false` |
+| | `AUTHENTIK_TENANTS_ENABLED` | Enable multi-tenancy | `true` |
 | **Domains** | `AUTHENTIK_PUBLIC_DOMAIN` | Public domain name | - |
 | | `AUTHENTIK_PRIVATE_DOMAIN` | Private domain name | - |
 | | `AUTHENTIK_CERT_RESOLVER` | TLS certificate resolver | `letsencrypt` |
@@ -206,9 +234,10 @@ All services include health checks:
 
 ### Network Security
 
-- Internal networks (`authentik_app`, `authentik_db`) are isolated
-- Only the server service is exposed to external networks
-- Database and Redis are not accessible from outside
+- **authentik_app**: Application network with controlled internet access
+- **authentik_db**: Internal database network (fully isolated)
+- Database and Redis are not accessible from outside the stack
+- Only Authentik server service is exposed via reverse proxy
 
 ### Volume Security
 
