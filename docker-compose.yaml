@@ -40,7 +40,6 @@ services:
     networks:
       authentik_app:
       authentik_db:
-      container_internet:
     labels:
       - "traefik.enable=true"
       # Main Interface - Public Domain HTTP
@@ -101,7 +100,6 @@ services:
     networks:
       - authentik_app
       - authentik_db
-      - container_internet
     depends_on:
       - redis
       - database
@@ -169,7 +167,7 @@ services:
     volumes:
       - "authentik_geoip_volume:/usr/share/GeoIP"
     networks:
-      - container_internet
+      - authentik_app
     restart: unless-stopped
     deploy:
       replicas: ${ENABLE_GEOIP_UPDATE:-1}
@@ -184,7 +182,6 @@ services:
       - TUNNEL_TOKEN=${AUTHENTIK_CLOUDFLARE_TUNNEL_TOKEN}
     networks:
       - authentik_app
-      - container_internet
     restart: unless-stopped
     deploy:
       replicas: ${ENABLE_AUTHENTIK_CLOUDFLARED:-0}
@@ -196,10 +193,9 @@ services:
       start_period: 60s
 
 networks:
-  # Internal isolated network for inter-service communication
+  # App network with internet access for all services
   authentik_app:
     name: "${AUTHENTIK_APP_NETWORK}"
-    internal: true
     driver: bridge
 
   # Database network for database communication
@@ -207,11 +203,6 @@ networks:
     name: "${AUTHENTIK_DB_NETWORK}"
     internal: true
     driver: bridge
-
-  # External network for internet access (supports macvlan)
-  container_internet:
-    external: true
-    name: "${CONTAINERS_INTERNET_NETWORK:-containers_internet}"
 
 volumes:
   # Media volume for uploaded files and custom assets
